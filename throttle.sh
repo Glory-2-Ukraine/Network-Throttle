@@ -149,13 +149,22 @@ apply_throttle() {
     local kbits
     kbits=$(echo "$BANDWIDTH_MBS * 8000" | bc | cut -d. -f1)
 
+    # Calculate r2q to keep HTB quantum near MTU (1500 bytes), suppressing the
+    # "quantum of class is big" warning that appears at low bandwidths.
+    # quantum = rate_bytes_per_sec / r2q  => target ~1500 bytes (one Ethernet frame)
+    local bytes_per_sec r2q
+    bytes_per_sec=$(echo "$BANDWIDTH_MBS * 1000000" | bc | cut -d. -f1)
+    r2q=$(echo "$bytes_per_sec / 1500" | bc)
+    [[ "$r2q" -lt 1     ]] && r2q=1
+    [[ "$r2q" -gt 65535 ]] && r2q=65535
+
     log "Applying throttle: ${BANDWIDTH_MBS} MB/s (${kbits} kbit/s) on ${INTERFACE}"
 
     # Remove any existing qdisc (ignore error if none exists)
     tc qdisc del dev "$INTERFACE" root 2>/dev/null || true
 
-    # Add root HTB qdisc
-    tc qdisc add dev "$INTERFACE" root handle 1: htb default 10
+    # Add root HTB qdisc with tuned r2q to avoid quantum warnings
+    tc qdisc add dev "$INTERFACE" root handle 1: htb default 10 r2q "${r2q}"
 
     # Add HTB class with rate = max bandwidth, burst = 10% of rate
     local burst_kbits=$(( kbits / 10 ))
