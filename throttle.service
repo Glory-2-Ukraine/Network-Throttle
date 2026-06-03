@@ -1,0 +1,43 @@
+# =============================================================================
+# throttle.service — systemd unit for network bandwidth throttle manager
+# =============================================================================
+# INSTALL:
+#   sudo cp throttle.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable throttle.service
+#   sudo systemctl start throttle.service
+# =============================================================================
+
+[Unit]
+Description=Network Bandwidth Throttle Manager
+Documentation=https://github.com/Glory-2-Ukraine/Network-Throttle
+# Start after network interfaces are up and assigned addresses
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Run as root — required to execute tc (traffic control) commands
+User=root
+ExecStart=/usr/local/bin/throttle.sh
+
+# ── Restart policy ──────────────────────────────────────────────────────────
+# Restart on any failure. 5-second delay prevents rapid crash loops.
+Restart=always
+RestartSec=5
+
+# ── Hardening ───────────────────────────────────────────────────────────────
+# Allow only the network admin capability needed for tc
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=yes
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+# All stdout/stderr is captured by journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=throttle
+
+[Install]
+# Enable for multi-user (normal boot) target
+WantedBy=multi-user.target
